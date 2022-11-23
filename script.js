@@ -162,12 +162,16 @@ const removePrevSuggestions = () => {
     prevSuggestions.forEach(el => el.remove());
 }
 
-const showText = (text) => {
+const showText = (text, onClick) => {
     removePrevSuggestions();
     const suggestionsContainer = document.querySelector('div[id^=typeaheadDropdown-]');
     const container = document.createElement('div');
     container.classList.add("pluginSuggestionContainer");
-    container.classList.add("text");
+    if (onClick) {
+        container.addEventListener('mousedown', onClick);
+    } else {
+        container.classList.add("text");
+    }
 
     const textEl = document.createElement('div');
     container.classList.add('pluginTextEl');
@@ -320,7 +324,13 @@ const onSearchChange = (event) => {
         const twitterHandle = match[2];
         const searchText = match[3];
         suggestions = [];
-        showText(`Search "${searchText}" in ${twitterHandle} tweets`)
+        showText(`Search "${searchText}" in ${twitterHandle} tweets`, () => {
+            // non-ideal, as it reloads the page. But simulating <enter> keydown events didn't work.
+            const searchUrl = new URL('https://twitter.com/search');
+            searchUrl.searchParams.set('q', `from:${twitterHandle} ${searchText}`);
+            searchUrl.searchParams.set('src', 'typed_query');
+            window.open(searchUrl.toString(), "_self");
+        });
     }
 
     if (isFromSuggest || isFromSearch) {
