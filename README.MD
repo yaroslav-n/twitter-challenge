@@ -7,4 +7,4 @@ To use this plugin:
 3. ???
 4. Profit!
 
-`hint: use Tab to switch bettween suggestions, enter to confirm`
+`hint: use arrows to switch bettween suggestions, enter to confirm`
