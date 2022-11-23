@@ -320,7 +320,7 @@ const onSearchChange = (event) => {
         const twitterHandle = match[2];
         const searchText = match[3];
         suggestions = [];
-        showText(`Search "${searchText}" in ${twitterHandle} tweets"`)
+        showText(`Search "${searchText}" in ${twitterHandle} tweets`)
     }
 
     if (isFromSuggest || isFromSearch) {
