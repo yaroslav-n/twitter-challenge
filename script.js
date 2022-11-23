@@ -240,6 +240,7 @@ display: none !important;
 }
 
 const showNativeSuggestions = () => {
+    removePrevSuggestions();
     if (hideSuggestionStyleEl) {
         console.log('>>> showNativeSuggestions');;
         hideSuggestionStyleEl.remove()
