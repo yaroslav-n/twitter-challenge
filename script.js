@@ -4,7 +4,7 @@
 // @version      0.1
 // @description  try to take over the world!
 // @author       Yaroslav
-// @match        https://twitter.com/*
+// @match        https://twitter.com/explore
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=twitter.com
 // @grant        none
 // ==/UserScript==
@@ -15,6 +15,9 @@ const isFromSuggestRegex = /^(from:)([^ ]*)$/;
 const ifFromSearchRegex = /^(from:)([^ ]+) (.*)$/;
 let hideSuggestionStyleEl;
 let timeout;
+const typeAheadDebounceMs = 200;
+let selectedHandle = '';
+let suggestions = []; // [{avatarUrl, name, twitterHandle, bio, isBlueTick}]
 
 const addPluginCSS = () => {
     const head = document.head || document.getElementsByTagName('head')[0];
@@ -34,6 +37,15 @@ font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto
    }
    .pluginSuggestionContainer:hover {
 background-color: rgb(247,249,249);
+   }
+
+   .pluginSuggestionContainer.text:hover{
+   cursor:default;
+   background-color: transparent;
+   }
+
+   .pluginSuggestionContainer.selected {
+   background-color: rgb(247,249,249);
    }
 
    .pluginAvatar {
@@ -99,6 +111,14 @@ const getCookie = (cname) => {
   return "";
 }
 
+const setInputText = (text) => {
+    const searchEl = document.querySelector(searchboxSelector);
+    if (searchEl) {
+        searchEl.focus();
+        searchEl.value = text;
+    }
+}
+
 const getTypeAhead = (twitterHandle) => {
     return new Promise((resolve, reject) => {
         const requestUrl = new URL(typeAheadUrl);
@@ -137,17 +157,40 @@ const getTypeAhead = (twitterHandle) => {
     });
 }
 
-// suggestions: [{avatarUrl, name, twitterHandle, bio, isBlueTick}]
-const showPluginSuggestions = (suggestions) => {
-    // removing all previous suggestions
+const removePrevSuggestions = () => {
     const prevSuggestions = document.querySelectorAll('.pluginSuggestionContainer');
     prevSuggestions.forEach(el => el.remove());
+}
+
+const showText = (text) => {
+    removePrevSuggestions();
+    const suggestionsContainer = document.querySelector('div[id^=typeaheadDropdown-]');
+    const container = document.createElement('div');
+    container.classList.add("pluginSuggestionContainer");
+    container.classList.add("text");
+
+    const textEl = document.createElement('div');
+    container.classList.add('pluginTextEl');
+    const handleText = document.createTextNode(text);
+    textEl.appendChild(handleText);
+    container.appendChild(textEl);
+    suggestionsContainer.appendChild(container);
+}
+
+const showPluginSuggestions = (suggestions) => {
+    // removing all previous suggestions
+    removePrevSuggestions();
 
     const suggestionsContainer = document.querySelector('div[id^=typeaheadDropdown-]');
+
+    console.log('>>> selectedHandle', selectedHandle);
 
     suggestions.forEach(s => {
         const container = document.createElement('div');
         container.classList.add("pluginSuggestionContainer");
+        if (s.twitterHandle === selectedHandle) {
+            container.classList.add("selected");
+        }
 
         const avatar = document.createElement('img');
         avatar.classList.add("pluginAvatar");
@@ -176,17 +219,7 @@ const showPluginSuggestions = (suggestions) => {
         textContainer.appendChild(bio);
 
         container.appendChild(textContainer);
-
-        container.addEventListener("click", () => {
-            const searchEl = document.querySelector(searchboxSelector);
-            if (searchEl) {
-                searchEl.focus();
-                searchEl.value = `from:${s.twitterHandle} `;
-                //console.log('>>> searhcEl', searchEl.value);
-                //searchEl.focus();
-                //console.log('>>> searhcEl', searchEl.value);
-            }
-        });
+        container.addEventListener("click", () => setInputText(`from:${s.twitterHandle} `));
 
         suggestionsContainer.appendChild(container);
     });
@@ -214,6 +247,35 @@ const showNativeSuggestions = () => {
     };
 }
 
+const onKeyDown = (e) => {
+    if (suggestions.length) {
+        if (e.keyCode == '38') { // up
+           let newIndex = suggestions.length - 1;
+           const selectedIndex = suggestions.findIndex((s) => s.twitterHandle === selectedHandle);
+            if (selectedIndex > 0) {
+                newIndex = selectedIndex - 1;
+            }
+            selectedHandle = suggestions[newIndex].twitterHandle;
+            showPluginSuggestions(suggestions);
+
+        } else if (e.keyCode == '40') { // down
+            let newIndex = 0;
+           const selectedIndex = suggestions.findIndex((s) => s.twitterHandle === selectedHandle);
+            if (selectedIndex < suggestions.length - 1) {
+                newIndex = selectedIndex + 1;
+            }
+            selectedHandle = suggestions[newIndex].twitterHandle;
+            showPluginSuggestions(suggestions);
+        } else if (e.keyCode == '13' && selectedHandle) { //enter
+            e.preventDefault();
+            e.stopPropagation();
+            setInputText(`from:${selectedHandle} `);
+            selectedHandle = '';
+            suggestions = [];
+        }
+    }
+};
+
 const onSearchChange = (event) => {
     const text = event.target.value;
     const isFromSuggest = isFromSuggestRegex.test(text);
@@ -222,33 +284,42 @@ const onSearchChange = (event) => {
     if (isFromSuggest) {
         const match = text.match(isFromSuggestRegex);
         const twitterHandle = match[2];
-        if (timeout) {
-            clearTimeout(timeout);
-        };
-        timeout = setTimeout(() => {
-            getTypeAhead(twitterHandle).then((resultsText) => {
-                console.log('>>>wh');
-                const results = JSON.parse(resultsText);
+        if (twitterHandle === '') {
+            showText('Keep typing a user name...')
+        } else {
 
-                const suggestions = results.users.map((u) => {
+            if (timeout) {
+                clearTimeout(timeout);
+            };
+            timeout = setTimeout(() => {
+                getTypeAhead(twitterHandle).then((resultsText) => {
+                    const results = JSON.parse(resultsText);
 
-                    return {
-                        avatarUrl: u.profile_image_url_https,
-                        name: u.name,
-                        twitterHandle: u.tokens[1].token,
-                        bio: u.result_context.display_string || '',
-                        isBlueTick: u.verified || u.ext_is_blue_verified,
-                    }});
+                    if (!results.users.length) {
+                        showText('No users found')
+                    } else {
 
-                showPluginSuggestions(suggestions);
-            });
-        }, 100);
+                    suggestions = results.users.map((u) => {
+                        return {
+                            avatarUrl: u.profile_image_url_https,
+                            name: u.name,
+                            twitterHandle: u.tokens[1].token,
+                            bio: u.result_context.display_string || '',
+                            isBlueTick: u.verified || u.ext_is_blue_verified,
+                        }});
+
+                    showPluginSuggestions(suggestions);
+                    };
+                });
+            }, typeAheadDebounceMs);
+        }
     }
     if (isFromSearch) {
         const match = text.match(ifFromSearchRegex);
         const twitterHandle = match[2];
         const searchText = match[3];
-        console.log('>>> search:', searchText, 'from: ', twitterHandle);
+        suggestions = [];
+        showText(`Search "${searchText}" in ${twitterHandle} tweets"`)
     }
 
     if (isFromSuggest || isFromSearch) {
@@ -265,10 +336,14 @@ const onSearchChange = (event) => {
 
     const onSearchAdded = (searchEl) => {
         searchEl.addEventListener('input', onSearchChange);
+        searchEl.addEventListener('change', onSearchChange);
+        searchEl.addEventListener('keydown', onKeyDown);
     };
 
     const onSearchRemoved = (searchEl) => {
         searchEl.removeEventListener('input', onSearchChange);
+        searchEl.removeEventListener('change', onSearchChange);
+        searchEl.removeEventListener('keydown', onKeyDown);
     }
 
     const observer = createObserver(onSearchAdded, onSearchRemoved);
