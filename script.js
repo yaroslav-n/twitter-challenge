@@ -123,6 +123,8 @@ const getTypeAhead = (twitterHandle) => {
     return new Promise((resolve, reject) => {
         const requestUrl = new URL(typeAheadUrl);
         const csrfToken = getCookie("ct0");
+        const isLoggedIn = !!getCookie("auth_token");
+        const guestToken = getCookie("gt");
         // constant in twitter js code
         const authorization = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 
@@ -135,7 +137,11 @@ const getTypeAhead = (twitterHandle) => {
         xmlHttp.open("GET", requestUrl.toString(), false);
         xmlHttp.setRequestHeader('x-csrf-token', csrfToken);
         xmlHttp.setRequestHeader('x-twitter-active-user', 'yes');
-        xmlHttp.setRequestHeader('x-twitter-auth-type', 'OAuth2Session');
+        if(isLoggedIn){
+            xmlHttp.setRequestHeader('x-twitter-auth-type', 'OAuth2Session');
+        } else {
+            xmlHttp.setRequestHeader('x-guest-token', guestToken);
+        }
         xmlHttp.setRequestHeader('x-twitter-client-language', 'en');
         xmlHttp.setRequestHeader('authorization', `Bearer ${authorization}`);
 
@@ -308,7 +314,7 @@ const onSearchChange = (event) => {
                         return {
                             avatarUrl: u.profile_image_url_https,
                             name: u.name,
-                            twitterHandle: u.tokens[1].token,
+                            twitterHandle: '@'+u.screen_name,
                             bio: u.result_context.display_string || '',
                             isBlueTick: u.verified || u.ext_is_blue_verified,
                         }});
