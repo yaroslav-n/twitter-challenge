@@ -123,7 +123,7 @@ const getTypeAhead = (twitterHandle) => {
     return new Promise((resolve, reject) => {
         const requestUrl = new URL(typeAheadUrl);
         const csrfToken = getCookie("ct0");
-        const isLoggedIn = !!getCookie("auth_token");
+        const isLoggedIn = !!getCookie("twid");
         const guestToken = getCookie("gt");
         // constant in twitter js code
         const authorization = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
